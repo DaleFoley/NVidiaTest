@@ -167,6 +167,8 @@ int main()
 
     RZRESULT result;
     RZEFFECTID Frame1;
+
+    ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE breathingColor = {};
     ChromaSDK::Keyboard::STATIC_EFFECT_TYPE staticColor = {};
 
     while (true)
@@ -206,9 +208,9 @@ int main()
 
             staticColor.Color = commonOccuringColor;
 
-            //ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE breathingColor = {};
             //breathingColor.Color1 = commonOccuringColor;
-            //breathingColor.Color2 = commonOccuringColor;
+            //breathingColor.Color2 = 255;
+            //breathingColor.Type = ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE::TWO_COLORS;
 
             result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &Frame1);
             //result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_BREATHING, &breathingColor, &Frame1);
