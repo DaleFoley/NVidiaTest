@@ -4,16 +4,52 @@
 #include <stdio.h>
 #include <WinUser.h>
 #include <wingdi.h>
+#include <vector>
+#include <highlevelmonitorconfigurationapi.h>
+#include <lowlevelmonitorconfigurationapi.h>
+#include <physicalmonitorenumerationapi.h>
 
 #include "../../nvapi/nvapi.h"
-#include <vector>
 
-NvAPI_Status AllocateAndGetDisplayConfig(NvU32* pathInfoCount, NV_DISPLAYCONFIG_PATH_INFO** pPathInfo);
-NV_COLOR_DATA GetFirstMonitorColorData();
-void ShowCurrentDisplayConfig(void);
-NvAPI_Status SetMode(void);
+#include "../../ChromaSDK/inc/RzChromaSDKDefines.h"
+#include "../../ChromaSDK/inc/RzChromaSDKTypes.h"
+#include "../../ChromaSDK/inc/RzErrors.h"
 
-struct Screens
+#ifdef _WIN64
+#define CHROMASDKDLL        _T("RzChromaSDK64.dll")
+#else
+#define CHROMASDKDLL        _T("RzChromaSDK.dll")
+#endif
+
+typedef RZRESULT(*INIT)(void);
+typedef RZRESULT(*UNINIT)(void);
+typedef RZRESULT(*CREATEEFFECT)(RZDEVICEID DeviceId, ChromaSDK::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*CREATEKEYBOARDEFFECT)(ChromaSDK::Keyboard::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*CREATEHEADSETEFFECT)(ChromaSDK::Headset::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*CREATEMOUSEPADEFFECT)(ChromaSDK::Mousepad::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*CREATEMOUSEEFFECT)(ChromaSDK::Mouse::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*CREATEKEYPADEFFECT)(ChromaSDK::Keypad::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*CREATECHROMALINKEFFECT)(ChromaSDK::ChromaLink::EFFECT_TYPE Effect, PRZPARAM pParam, RZEFFECTID* pEffectId);
+typedef RZRESULT(*SETEFFECT)(RZEFFECTID EffectId);
+typedef RZRESULT(*DELETEEFFECT)(RZEFFECTID EffectId);
+typedef RZRESULT(*REGISTEREVENTNOTIFICATION)(HWND hWnd);
+typedef RZRESULT(*UNREGISTEREVENTNOTIFICATION)(void);
+typedef RZRESULT(*QUERYDEVICE)(RZDEVICEID DeviceId, ChromaSDK::DEVICE_INFO_TYPE& DeviceInfo);
+
+INIT Init = NULL;
+UNINIT UnInit = NULL;
+CREATEEFFECT CreateEffect = NULL;
+CREATEKEYBOARDEFFECT CreateKeyboardEffect = NULL;
+CREATEMOUSEEFFECT CreateMouseEffect = NULL;
+CREATEHEADSETEFFECT CreateHeadsetEffect = NULL;
+CREATEMOUSEPADEFFECT CreateMousematEffect = NULL;
+CREATEKEYPADEFFECT CreateKeypadEffect = NULL;
+CREATECHROMALINKEFFECT CreateChromaLinkEffect = NULL;
+SETEFFECT SetEffect = NULL;
+DELETEEFFECT DeleteEffect = NULL;
+QUERYDEVICE QueryDevice = NULL;
+
+struct ScreensBoundaries
 {
     int left;
     int top;
@@ -27,8 +63,8 @@ BOOL CALLBACK MyInfoEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonit
     iMonitor.cbSize = sizeof(MONITORINFOEX);
     GetMonitorInfo(hMonitor, &iMonitor);
 
-    std::vector<Screens>* s = reinterpret_cast<std::vector<Screens>*>(dwData);
-    Screens newScreen;
+    std::vector<ScreensBoundaries>* s = reinterpret_cast<std::vector<ScreensBoundaries>*>(dwData);
+    ScreensBoundaries newScreen;
     newScreen.left = iMonitor.rcMonitor.left;
     newScreen.right = iMonitor.rcMonitor.right;
     newScreen.bottom = iMonitor.rcMonitor.bottom;
@@ -41,60 +77,43 @@ BOOL CALLBACK MyInfoEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonit
 
 int main()
 {
-    //NvAPI_Status ret = NvAPI_Status::NVAPI_OK;
-    //ret = NvAPI_Initialize();
+    HMODULE razerModule;
+    razerModule = LoadLibrary(CHROMASDKDLL);
 
-    //if (ret != NVAPI_OK)
-    //{
-    //    printf("NvAPI_Initialize() failed = 0x%x", ret);
-    //    return 1; // Initialization failed
-    //}
+    if (razerModule != NULL)
+    {
+        INIT Init = (INIT)GetProcAddress(razerModule, "Init");
+        if (Init != NULL)
+        {
+            RZRESULT rzResult = Init();
+            if (rzResult == RZRESULT_SUCCESS)
+            {
+                CreateEffect = (CREATEEFFECT)GetProcAddress(razerModule, "CreateEffect");
+                CreateKeyboardEffect = (CREATEKEYBOARDEFFECT)GetProcAddress(razerModule, "CreateKeyboardEffect");
+                CreateMouseEffect = (CREATEMOUSEEFFECT)GetProcAddress(razerModule, "CreateMouseEffect");
+                CreateMousematEffect = (CREATEMOUSEPADEFFECT)GetProcAddress(razerModule, "CreateMousepadEffect");
+                CreateKeypadEffect = (CREATEKEYPADEFFECT)GetProcAddress(razerModule, "CreateKeypadEffect");
+                CreateHeadsetEffect = (CREATEHEADSETEFFECT)GetProcAddress(razerModule, "CreateHeadsetEffect");
+                CreateChromaLinkEffect = (CREATECHROMALINKEFFECT)GetProcAddress(razerModule, "CreateChromaLinkEffect");
+                SetEffect = (SETEFFECT)GetProcAddress(razerModule, "SetEffect");
+                DeleteEffect = (DELETEEFFECT)GetProcAddress(razerModule, "DeleteEffect");
+            }
+        }
+    }
 
-    //NvU32 displayIds[NVAPI_MAX_DISPLAYS] = { 0 };
-    //NvU32 noDisplays = 0;
+    HDC topWindow = GetWindowDC(NULL);
 
-    //NV_COLOR_DATA colorData = { 0 };
-    //colorData.version = NV_COLOR_DATA_VER;
-    //colorData.size = sizeof(NV_COLOR_DATA);
-    //colorData.cmd = NV_COLOR_CMD_GET;
+    tagMONITORINFO monitorInfo;
+    tagPOINT currentCursorCoords;
+    tagRECT topWindowRect;
 
-    //NvPhysicalGpuHandle nvGPUHandle[NVAPI_MAX_PHYSICAL_GPUS] = { 0 };
-    //NvU32 pGpuCount;
-    //NvDisplayHandle hNvDisplay = { 0 };
+    std::vector<ScreensBoundaries> scr;
 
-    //_DISPLAY_DEVICEA displayTest;
-    //displayTest.cb = sizeof(DISPLAY_DEVICE);
-    //
-    //PDISPLAY_DEVICEA testDev = &displayTest;
+    EnumDisplayMonitors(topWindow, NULL, MyInfoEnumProc, reinterpret_cast<LPARAM>(&scr));
 
-    //bool isEnumDisplayDevicesSuccessfull = EnumDisplayDevicesA(nullptr, 0, testDev, EDD_GET_DEVICE_INTERFACE_NAME);
-    //std::string displayName = testDev->DeviceName;
-    //const char* displayNameChar = displayName.c_str();
-
-    //ret = NvAPI_GetAssociatedNvidiaDisplayHandle(displayNameChar, &hNvDisplay);
-    //ret = NvAPI_GetPhysicalGPUsFromDisplay(hNvDisplay, nvGPUHandle, &pGpuCount);
-
-    //NV_GPU_CLIENT_ILLUM_ZONE_INFO_PARAMS illumControl = { 0 };
-    //illumControl.version = NV_GPU_CLIENT_ILLUM_ZONE_INFO_PARAMS_VER;
-
-    //if (nvGPUHandle[0] != 0)
-    //{
-    //    ret = NvAPI_GPU_ClientIllumZonesGetInfo(nvGPUHandle[0], &illumControl);
-    //}
-    //ret = NvAPI_Disp_ColorControl(displayIds[0], &colorData);
-
-    //TODO: Locking the pc breaks this.
     while (true)
     {
-        HDC topWindow = GetWindowDC(NULL);
-        tagMONITORINFO monitorInfo;
-        tagPOINT currentCursorCoords;
-        tagRECT topWindowRect;
-
-        std::vector<Screens> scr;
-        //bool hasCursorCoords = GetCursorPos(&currentCursorCoords);
-
-        EnumDisplayMonitors(topWindow, NULL, MyInfoEnumProc, reinterpret_cast<LPARAM>(&scr));
+        const int pixelOffset = 100;
 
         std::size_t scrSize = scr.size();
         std::vector<COLORREF> colors;
@@ -103,13 +122,11 @@ int main()
             int right = scr[0].right;
             int bottom = scr[0].bottom;
 
-            const int totalPixels = right * bottom;
-
             COLORREF pixel;
 
-            for (int y = 0; y < bottom; y += 150)
+            for (int y = 0; y < bottom; y += pixelOffset)
             {
-                for (int x = 0; x < right; x += 150)
+                for (int x = 0; x < right; x += pixelOffset)
                 {
                     pixel = GetPixel(topWindow, x, y);
                     colors.push_back(pixel);
@@ -118,137 +135,39 @@ int main()
         }
 
         int averageRGB = 0;
-        for (int i = 0; i != colors.size(); ++i)
+        std::size_t colorsSize = colors.size();
+        if (colorsSize > 0)
         {
-            averageRGB += colors.at(i);
-        }
+            for (int i = 0; i != colorsSize; ++i)
+            {
+                averageRGB += colors.at(i);
+            }
 
-        averageRGB = averageRGB / colors.size();
-        DWORD red = GetRValue(averageRGB);
-        DWORD green = GetGValue(averageRGB);
-        DWORD blue = GetBValue(averageRGB);
+            averageRGB = averageRGB / colorsSize;
 
-        std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
-        //if (isRectCalculated)
-        //{
-        //    //COLORREF pixelColor = GetPixel(topWindow, currentCursorCoords.x, currentCursorCoords.y);
-        //    COLORREF pixelColor = GetPixel(topWindow, 1, 1);
+            DWORD red = GetRValue(averageRGB);
+            DWORD green = GetGValue(averageRGB);
+            DWORD blue = GetBValue(averageRGB);
 
-        //    DWORD red = GetRValue(pixelColor);
-        //    DWORD green = GetGValue(pixelColor);
-        //    DWORD blue = GetBValue(pixelColor);
+            std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
 
-        //    std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
-        //}
+            RZEFFECTID Frame1;
 
-        //Sleep(1000);
-    }
-}
+            ChromaSDK::Keyboard::STATIC_EFFECT_TYPE staticColor = {};
+            staticColor.Color = averageRGB;
 
-NvAPI_Status AllocateAndGetDisplayConfig(NvU32* pathInfoCount, NV_DISPLAYCONFIG_PATH_INFO** pPathInfo)
-{
-    NvAPI_Status ret;
+            RZRESULT result;
+            result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &Frame1);
+            if (result != 0)
+            {
+                std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+            }
 
-    // Retrieve the display path information
-    NvU32 pathCount = 0;
-    NV_DISPLAYCONFIG_PATH_INFO* pathInfo = NULL;
-
-    ret = NvAPI_DISP_GetDisplayConfig(&pathCount, NULL);
-    if (ret != NVAPI_OK)    return ret;
-
-    pathInfo = (NV_DISPLAYCONFIG_PATH_INFO*)malloc(pathCount * sizeof(NV_DISPLAYCONFIG_PATH_INFO));
-    if (!pathInfo)
-    {
-        return NVAPI_OUT_OF_MEMORY;
-    }
-
-    memset(pathInfo, 0, pathCount * sizeof(NV_DISPLAYCONFIG_PATH_INFO));
-    for (NvU32 i = 0; i < pathCount; i++)
-    {
-        pathInfo[i].version = NV_DISPLAYCONFIG_PATH_INFO_VER;
-    }
-
-    // Retrieve the targetInfo counts
-    ret = NvAPI_DISP_GetDisplayConfig(&pathCount, pathInfo);
-    if (ret != NVAPI_OK)
-    {
-        return ret;
-    }
-
-    for (NvU32 i = 0; i < pathCount; i++)
-    {
-        // Allocate the source mode info
-
-        if (pathInfo[i].version == NV_DISPLAYCONFIG_PATH_INFO_VER1 || pathInfo[i].version == NV_DISPLAYCONFIG_PATH_INFO_VER2)
-        {
-            pathInfo[i].sourceModeInfo = (NV_DISPLAYCONFIG_SOURCE_MODE_INFO*)malloc(sizeof(NV_DISPLAYCONFIG_SOURCE_MODE_INFO));
-        }
-        else
-        {
-
-#ifdef NV_DISPLAYCONFIG_PATH_INFO_VER3
-            pathInfo[i].sourceModeInfo = (NV_DISPLAYCONFIG_SOURCE_MODE_INFO*)malloc(pathInfo[i].sourceModeInfoCount * sizeof(NV_DISPLAYCONFIG_SOURCE_MODE_INFO));
-#endif
-
-        }
-        if (pathInfo[i].sourceModeInfo == NULL)
-        {
-            return NVAPI_OUT_OF_MEMORY;
-        }
-        memset(pathInfo[i].sourceModeInfo, 0, sizeof(NV_DISPLAYCONFIG_SOURCE_MODE_INFO));
-
-        // Allocate the target array
-        pathInfo[i].targetInfo = (NV_DISPLAYCONFIG_PATH_TARGET_INFO*)malloc(pathInfo[i].targetInfoCount * sizeof(NV_DISPLAYCONFIG_PATH_TARGET_INFO));
-        if (pathInfo[i].targetInfo == NULL)
-        {
-            return NVAPI_OUT_OF_MEMORY;
-        }
-        // Allocate the target details
-        memset(pathInfo[i].targetInfo, 0, pathInfo[i].targetInfoCount * sizeof(NV_DISPLAYCONFIG_PATH_TARGET_INFO));
-        for (NvU32 j = 0; j < pathInfo[i].targetInfoCount; j++)
-        {
-            pathInfo[i].targetInfo[j].details = (NV_DISPLAYCONFIG_PATH_ADVANCED_TARGET_INFO*)malloc(sizeof(NV_DISPLAYCONFIG_PATH_ADVANCED_TARGET_INFO));
-            memset(pathInfo[i].targetInfo[j].details, 0, sizeof(NV_DISPLAYCONFIG_PATH_ADVANCED_TARGET_INFO));
-            pathInfo[i].targetInfo[j].details->version = NV_DISPLAYCONFIG_PATH_ADVANCED_TARGET_INFO_VER;
+            result = SetEffect(Frame1);
+            if (result != 0)
+            {
+                std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+            }
         }
     }
-
-    // Retrieve the full path info
-    ret = NvAPI_DISP_GetDisplayConfig(&pathCount, pathInfo);
-    if (ret != NVAPI_OK)
-    {
-        return ret;
-    }
-
-    *pathInfoCount = pathCount;
-    *pPathInfo = pathInfo;
-    return NVAPI_OK;
-}
-
-NV_COLOR_DATA GetFirstMonitorColorData()
-{
-    NV_COLOR_DATA result = { 0 };
-    result.version = NV_COLOR_DATA_VER;
-    result.size = sizeof(NV_COLOR_DATA);
-    result.cmd = NV_COLOR_CMD_GET;
-
-    NvU32 displayIds[NVAPI_MAX_DISPLAYS] = { 0 };
-
-    NV_DISPLAYCONFIG_PATH_INFO *pathInfo = NULL;
-    NvU32 pathCount = 0;
-
-    NvAPI_Status ret = NvAPI_Status::NVAPI_OK;
-
-    ret = AllocateAndGetDisplayConfig(&pathCount, &pathInfo);
-    if (ret != NVAPI_OK)
-    {
-        printf("AllocateAndGetDisplayConfig failed!\n");
-        getchar();
-        exit(1);
-    }
-
-    //TODO: Get Display ID.
-    ret = NvAPI_Disp_ColorControl(displayIds[0], &result);
-
-    return result;
 }
