@@ -5,6 +5,7 @@
 #include <WinUser.h>
 #include <wingdi.h>
 #include <vector>
+#include <algorithm>
 #include <highlevelmonitorconfigurationapi.h>
 #include <lowlevelmonitorconfigurationapi.h>
 #include <physicalmonitorenumerationapi.h>
@@ -75,6 +76,59 @@ BOOL CALLBACK MyInfoEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonit
     return true;
 }
 
+template <typename T>
+static T getModeFromCollection(std::vector<T> collection)
+{
+    //This whole function feels haphazard, any cleaner way to do this?
+    std::sort(collection.begin(), collection.end());
+
+    int numbersSize = collection.size();
+
+    std::vector<T> collectionsUnique = collection;
+    std::vector<int> collectionsCount;
+
+    //As to why we need to prefix typename here, see:
+    //https://stackoverflow.com/questions/610245/where-and-why-do-i-have-to-put-the-template-and-typename-keywords
+    typename std::vector<T>::iterator it;
+    it = std::unique(collectionsUnique.begin(), collectionsUnique.end());
+
+    collectionsUnique.resize(std::distance(collectionsUnique.begin(), it));
+    std::sort(collectionsUnique.begin(), collectionsUnique.end());
+
+    int numbersUniqueSize = collectionsUnique.size();
+
+    //Only 1 or 0 items in the collection, nothing to do..
+    if (numbersUniqueSize == 0) return 0;
+    if (numbersUniqueSize == 1) return collectionsUnique[0];
+
+    int i = 0;
+    for (int x = 0; x != numbersUniqueSize; ++x)
+    {
+        int numbersSum = 0;
+        for (; i != numbersSize; ++i)
+        {
+            if (collection[i] != collectionsUnique[x]) break;
+            ++numbersSum;
+        }
+
+        collectionsCount.push_back(numbersSum);
+    }
+
+    int indexWithLargestNumber = 0;
+    int numberToCompare = 0;
+    int numberCountSize = collectionsCount.size();
+    for (int a = 0; a != numberCountSize; ++a)
+    {
+        if (collectionsCount[a] > numberToCompare)
+        {
+            numberToCompare = collectionsCount[a];
+            indexWithLargestNumber = a;
+        }
+    }
+
+    return collectionsUnique[indexWithLargestNumber];
+}
+
 int main()
 {
     HMODULE razerModule;
@@ -111,9 +165,13 @@ int main()
 
     EnumDisplayMonitors(topWindow, NULL, MyInfoEnumProc, reinterpret_cast<LPARAM>(&scr));
 
+    RZRESULT result;
+    RZEFFECTID Frame1;
+    ChromaSDK::Keyboard::STATIC_EFFECT_TYPE staticColor = {};
+
     while (true)
     {
-        const int pixelOffset = 100;
+        const int pixelOffset = 350;
 
         std::size_t scrSize = scr.size();
         std::vector<COLORREF> colors;
@@ -134,30 +192,26 @@ int main()
             }
         }
 
+        COLORREF commonOccuringColor = getModeFromCollection(colors);
+
         int averageRGB = 0;
         std::size_t colorsSize = colors.size();
         if (colorsSize > 0)
         {
-            for (int i = 0; i != colorsSize; ++i)
-            {
-                averageRGB += colors.at(i);
-            }
-
-            averageRGB = averageRGB / colorsSize;
-
-            DWORD red = GetRValue(averageRGB);
-            DWORD green = GetGValue(averageRGB);
-            DWORD blue = GetBValue(averageRGB);
+            DWORD red = GetRValue(commonOccuringColor);
+            DWORD green = GetGValue(commonOccuringColor);
+            DWORD blue = GetBValue(commonOccuringColor);
 
             std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
 
-            RZEFFECTID Frame1;
+            staticColor.Color = commonOccuringColor;
 
-            ChromaSDK::Keyboard::STATIC_EFFECT_TYPE staticColor = {};
-            staticColor.Color = averageRGB;
+            //ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE breathingColor = {};
+            //breathingColor.Color1 = commonOccuringColor;
+            //breathingColor.Color2 = commonOccuringColor;
 
-            RZRESULT result;
             result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &Frame1);
+            //result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_BREATHING, &breathingColor, &Frame1);
             if (result != 0)
             {
                 std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
