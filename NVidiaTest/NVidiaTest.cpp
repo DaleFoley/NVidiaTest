@@ -77,6 +77,27 @@ BOOL CALLBACK MyInfoEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonit
 }
 
 template <typename T>
+static std::vector<T> getUniqueCollection(std::vector<T> collection)
+{
+    std::sort(collection.begin(), collection.end());
+
+    int numbersSize = collection.size();
+
+    std::vector<T> collectionsUnique = collection;
+    std::vector<int> collectionsCount;
+
+    //As to why we need to prefix typename here, see:
+    //https://stackoverflow.com/questions/610245/where-and-why-do-i-have-to-put-the-template-and-typename-keywords
+    typename std::vector<T>::iterator it;
+    it = std::unique(collectionsUnique.begin(), collectionsUnique.end());
+
+    collectionsUnique.resize(std::distance(collectionsUnique.begin(), it));
+    std::sort(collectionsUnique.begin(), collectionsUnique.end());
+
+    return collectionsUnique;
+}
+
+template <typename T>
 static T getModeFromCollection(std::vector<T> collection)
 {
     //This whole function feels haphazard, any cleaner way to do this?
@@ -129,6 +150,38 @@ static T getModeFromCollection(std::vector<T> collection)
     return collectionsUnique[indexWithLargestNumber];
 }
 
+std::vector<COLORREF> GetCommonColorsFromScreen()
+{
+    std::vector<COLORREF> result;
+
+    HDC topWindow = GetWindowDC(NULL);
+    
+    std::vector<ScreensBoundaries> scr;
+    EnumDisplayMonitors(topWindow, NULL, MyInfoEnumProc, reinterpret_cast<LPARAM>(&scr));
+
+    const int pixelOffset = 400;
+
+    std::size_t scrSize = scr.size();
+    if (scrSize > 0)
+    {
+        int right = scr[0].right;
+        int bottom = scr[0].bottom;
+
+        COLORREF pixel;
+
+        for (int y = 0; y < bottom; y += pixelOffset)
+        {
+            for (int x = 0; x < right; x += pixelOffset)
+            {
+                pixel = GetPixel(topWindow, x, y);
+                result.push_back(pixel);
+            }
+        }
+    }
+
+    return result;
+}
+
 int main()
 {
     HMODULE razerModule;
@@ -173,7 +226,38 @@ int main()
 
     while (true)
     {
-        const int pixelOffset = 350;
+        std::vector<COLORREF> commonColors = GetCommonColorsFromScreen();
+        std::size_t commonColorsSize = commonColors.size();
+
+        ChromaSDK::Keyboard::v2::CUSTOM_EFFECT_TYPE Effect = {};
+        int colorIndex = 0;
+        for (int i = 0; i != 8; ++i)
+        {
+            for (int x = 0; x != 24; ++x)
+            {
+                if (colorIndex == commonColorsSize) colorIndex = 0;
+
+                Effect.Color[i][x] = commonColors[colorIndex];
+                ++colorIndex;
+            }
+        }
+
+        result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_CUSTOM2, &Effect, &Frame1);
+        if (result != 0)
+        {
+            std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+        }
+
+        result = SetEffect(Frame1);
+        if (result != 0)
+        {
+            std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+        }
+    }
+
+    while (true)
+    {
+        const int pixelOffset = 600;
 
         std::size_t scrSize = scr.size();
         std::vector<COLORREF> colors;
@@ -195,6 +279,7 @@ int main()
         }
 
         COLORREF commonOccuringColor = getModeFromCollection(colors);
+        std::vector<COLORREF> uniqueColors = getUniqueCollection(colors);
 
         int averageRGB = 0;
         std::size_t colorsSize = colors.size();
@@ -207,10 +292,6 @@ int main()
             std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
 
             staticColor.Color = commonOccuringColor;
-
-            //breathingColor.Color1 = commonOccuringColor;
-            //breathingColor.Color2 = 255;
-            //breathingColor.Type = ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE::TWO_COLORS;
 
             result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &Frame1);
             //result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_BREATHING, &breathingColor, &Frame1);
@@ -226,4 +307,6 @@ int main()
             }
         }
     }
+
+    
 }
