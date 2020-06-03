@@ -66,6 +66,7 @@ std::vector<COLORREF> Helper::GetCommonColorsFromScreenX()
     //      frame on the monitor, resizing the image and getting the RGB values from that.
     std::vector<COLORREF> result;
 
+    //Maybe pass this in as a parameter instead of always updating it on this function call..
     HDC topWindow = GetWindowDC(NULL);
 
     std::vector<ScreenBoundaries> screensBoundaries;

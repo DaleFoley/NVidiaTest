@@ -96,16 +96,6 @@ int main()
         return 1;
     }
 
-    HDC topWindow = GetWindowDC(NULL);
-
-    tagMONITORINFO monitorInfo;
-    tagPOINT currentCursorCoords;
-    tagRECT topWindowRect;
-
-    std::vector<Helper::ScreenBoundaries> screensBoundaries;
-
-    EnumDisplayMonitors(topWindow, NULL, Helper::MonitorInfoEnumProc, reinterpret_cast<LPARAM>(&screensBoundaries));
-
     RZRESULT result;
     RZEFFECTID effectID;
 
@@ -145,9 +135,9 @@ int main()
                 }
 
                 customEffect.Color[row][col] = randomColor;
-            }
 
-            std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
+                std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
+            }
 
             result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_CUSTOM2, &customEffect, &effectID);
             if (result != 0)
