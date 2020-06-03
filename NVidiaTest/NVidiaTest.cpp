@@ -16,6 +16,8 @@
 #include "../../ChromaSDK/inc/RzChromaSDKTypes.h"
 #include "../../ChromaSDK/inc/RzErrors.h"
 
+#include "Helper.h"
+
 #ifdef _WIN64
 #define CHROMASDKDLL        _T("RzChromaSDK64.dll")
 #else
@@ -50,85 +52,8 @@ SETEFFECT SetEffect = NULL;
 DELETEEFFECT DeleteEffect = NULL;
 QUERYDEVICE QueryDevice = NULL;
 
-struct ScreensBoundaries
-{
-    int left;
-    int top;
-    int right;
-    int bottom;
-};
-
-BOOL CALLBACK MyInfoEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData)
-{
-    MONITORINFOEX iMonitor;
-    iMonitor.cbSize = sizeof(MONITORINFOEX);
-    GetMonitorInfo(hMonitor, &iMonitor);
-
-    std::vector<ScreensBoundaries>* s = reinterpret_cast<std::vector<ScreensBoundaries>*>(dwData);
-    ScreensBoundaries newScreen;
-    newScreen.left = iMonitor.rcMonitor.left;
-    newScreen.right = iMonitor.rcMonitor.right;
-    newScreen.bottom = iMonitor.rcMonitor.bottom;
-    newScreen.top = iMonitor.rcMonitor.top;
-
-    s->push_back(newScreen);
-
-    return true;
-}
-
-template <typename T>
-static T getModeFromCollection(std::vector<T> collection)
-{
-    //This whole function feels haphazard, any cleaner way to do this?
-    std::sort(collection.begin(), collection.end());
-
-    int numbersSize = collection.size();
-
-    std::vector<T> collectionsUnique = collection;
-    std::vector<int> collectionsCount;
-
-    //As to why we need to prefix typename here, see:
-    //https://stackoverflow.com/questions/610245/where-and-why-do-i-have-to-put-the-template-and-typename-keywords
-    typename std::vector<T>::iterator it;
-    it = std::unique(collectionsUnique.begin(), collectionsUnique.end());
-
-    collectionsUnique.resize(std::distance(collectionsUnique.begin(), it));
-    std::sort(collectionsUnique.begin(), collectionsUnique.end());
-
-    int numbersUniqueSize = collectionsUnique.size();
-
-    //Only 1 or 0 items in the collection, nothing to do..
-    if (numbersUniqueSize == 0) return 0;
-    if (numbersUniqueSize == 1) return collectionsUnique[0];
-
-    int i = 0;
-    for (int x = 0; x != numbersUniqueSize; ++x)
-    {
-        int numbersSum = 0;
-        for (; i != numbersSize; ++i)
-        {
-            if (collection[i] != collectionsUnique[x]) break;
-            ++numbersSum;
-        }
-
-        collectionsCount.push_back(numbersSum);
-    }
-
-    int indexWithLargestNumber = 0;
-    int numberToCompare = 0;
-    int numberCountSize = collectionsCount.size();
-    for (int a = 0; a != numberCountSize; ++a)
-    {
-        if (collectionsCount[a] > numberToCompare)
-        {
-            numberToCompare = collectionsCount[a];
-            indexWithLargestNumber = a;
-        }
-    }
-
-    return collectionsUnique[indexWithLargestNumber];
-}
-
+//TODO: Color from mouse cursor position.
+//TODO: Error handling/logging.
 int main()
 {
     HMODULE razerModule;
@@ -152,7 +77,22 @@ int main()
                 SetEffect = (SETEFFECT)GetProcAddress(razerModule, "SetEffect");
                 DeleteEffect = (DELETEEFFECT)GetProcAddress(razerModule, "DeleteEffect");
             }
+            else
+            {
+                std::cout << "Chroma SDK Init returned: " << rzResult << ". Expected return value of: " << RZRESULT_SUCCESS << std::endl;
+                return rzResult;
+            }
         }
+        else
+        {
+            std::cout << "Failed to retrieve Init procedure from: " << CHROMASDKDLL << std::endl;
+            return 1;
+        }
+    }
+    else
+    {
+        std::cout << "Failed to load required chroma SDK DLL: " << CHROMASDKDLL << std::endl;
+        return 1;
     }
 
     HDC topWindow = GetWindowDC(NULL);
@@ -161,69 +101,172 @@ int main()
     tagPOINT currentCursorCoords;
     tagRECT topWindowRect;
 
-    std::vector<ScreensBoundaries> scr;
+    std::vector<Helper::ScreenBoundaries> screensBoundaries;
 
-    EnumDisplayMonitors(topWindow, NULL, MyInfoEnumProc, reinterpret_cast<LPARAM>(&scr));
+    EnumDisplayMonitors(topWindow, NULL, Helper::MonitorInfoEnumProc, reinterpret_cast<LPARAM>(&screensBoundaries));
 
     RZRESULT result;
-    RZEFFECTID Frame1;
+    RZEFFECTID effectID;
 
     ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE breathingColor = {};
     ChromaSDK::Keyboard::STATIC_EFFECT_TYPE staticColor = {};
+    ChromaSDK::Keyboard::v2::CUSTOM_EFFECT_TYPE customEffect = {};
 
+    constexpr int maxKeyboardKeys = ChromaSDK::Keyboard::v2::MAX_COLUMN * ChromaSDK::Keyboard::v2::MAX_ROW;
+
+    //This version collates the most commonly occuring colors from the screen and disperses those colours across our keys.
+    //while (true)
+    //{
+    //    std::vector<COLORREF> commonColors = Helper::GetCommonColorsFromScreen();
+    //    std::size_t commonColorsSize = commonColors.size();
+
+    //    //size will be 0 if the user locks their screen.
+    //    if (commonColorsSize == 0)
+    //    {
+    //        Sleep(1000);
+    //        continue;
+    //    }
+
+    //    int colorIndex = 0;
+    //    for (int i = 0; i != ChromaSDK::Keyboard::v2::MAX_ROW; ++i)
+    //    {
+    //        for (int x = 0; x != ChromaSDK::Keyboard::v2::MAX_COLUMN; ++x)
+    //        {
+    //            if (colorIndex == commonColorsSize) colorIndex = 0;
+
+    //            Effect.Color[i][x] = commonColors[colorIndex];
+    //            ++colorIndex;
+    //        }
+    //    }
+
+    //    result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_CUSTOM2, &Effect, &effectID);
+    //    if (result != 0)
+    //    {
+    //        std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //    }
+
+    //    result = SetEffect(effectID);
+    //    if (result != 0)
+    //    {
+    //        std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //    }
+    //}
+
+    //This version gets a collection of colors discovered on the screen and applies randomly a color as to a random key on the keyboard.
+    //This one is my favourite so far.
     while (true)
     {
-        const int pixelOffset = 350;
+        std::vector<COLORREF> colors = Helper::GetCommonColorsFromScreenX();
 
-        std::size_t scrSize = scr.size();
-        std::vector<COLORREF> colors;
-        if (scrSize > 0)
-        {
-            int right = scr[0].right;
-            int bottom = scr[0].bottom;
-
-            COLORREF pixel;
-
-            for (int y = 0; y < bottom; y += pixelOffset)
-            {
-                for (int x = 0; x < right; x += pixelOffset)
-                {
-                    pixel = GetPixel(topWindow, x, y);
-                    colors.push_back(pixel);
-                }
-            }
-        }
-
-        COLORREF commonOccuringColor = getModeFromCollection(colors);
-
-        int averageRGB = 0;
         std::size_t colorsSize = colors.size();
         if (colorsSize > 0)
         {
-            DWORD red = GetRValue(commonOccuringColor);
-            DWORD green = GetGValue(commonOccuringColor);
-            DWORD blue = GetBValue(commonOccuringColor);
+            DWORD red = 0;
+            DWORD green = 0;
+            DWORD blue = 0;
+
+            int col = 0;
+            int row = 0;
+            for (int i = 0; i != maxKeyboardKeys; ++i)
+            {
+                COLORREF randomColor = Helper::getRandomColor(colors);
+
+                red = GetRValue(randomColor);
+                green = GetGValue(randomColor);
+                blue = GetBValue(randomColor);
+
+                while (customEffect.Color[row][col] != 0)
+                {
+                    row = std::rand() % (ChromaSDK::Keyboard::v2::MAX_ROW - 0) + 0;
+                    col = std::rand() % (ChromaSDK::Keyboard::v2::MAX_COLUMN - 0) + 0;
+                }
+
+                customEffect.Color[row][col] = randomColor;
+            }
 
             std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
 
-            staticColor.Color = commonOccuringColor;
-
-            //breathingColor.Color1 = commonOccuringColor;
-            //breathingColor.Color2 = 255;
-            //breathingColor.Type = ChromaSDK::Keyboard::BREATHING_EFFECT_TYPE::TWO_COLORS;
-
-            result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &Frame1);
-            //result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_BREATHING, &breathingColor, &Frame1);
+            result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_CUSTOM2, &customEffect, &effectID);
             if (result != 0)
             {
                 std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
             }
 
-            result = SetEffect(Frame1);
+            result = SetEffect(effectID);
             if (result != 0)
             {
                 std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
             }
+
+            customEffect = {};
         }
     }
+
+    //This version gets a collection of colors discovered on the screen and applies randomly a color as a static color to the keyboard.
+    //The pixels are scanned both horizontally and vertically across the monitor.
+    //while (true)
+    //{
+    //    const int pixelOffset = 400;
+
+    //    std::vector<COLORREF> colors = Helper::GetCommonColorsFromScreenVerticalHorizontal(pixelOffset);
+
+    //    std::size_t colorsSize = colors.size();
+    //    if (colorsSize > 0)
+    //    {
+    //        COLORREF randomColor = Helper::getRandomColor(colors);
+
+    //        DWORD red = GetRValue(randomColor);
+    //        DWORD green = GetGValue(randomColor);
+    //        DWORD blue = GetBValue(randomColor);
+
+    //        std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
+    //        staticColor.Color = randomColor;
+
+    //        result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &effectID);
+    //        if (result != 0)
+    //        {
+    //            std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //        }
+
+    //        result = SetEffect(effectID);
+    //        if (result != 0)
+    //        {
+    //            std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //        }
+    //    }
+    //}
+
+    //This version gets the mode from a collection of colors discovered on the screen and applies that as a static color to the keyboard.
+    //The pixels are scanned both horizontally and vertically across the monitor.
+    //while (true)
+    //{
+    //    const int pixelOffset = 400;
+
+    //    std::vector<COLORREF> colors = Helper::GetCommonColorsFromScreenVerticalHorizontal(pixelOffset);
+
+    //    std::size_t colorsSize = colors.size();
+    //    if (colorsSize > 0)
+    //    {
+    //        COLORREF modeColor = Helper::getModeFromCollection(colors);
+
+    //        DWORD red = GetRValue(modeColor);
+    //        DWORD green = GetGValue(modeColor);
+    //        DWORD blue = GetBValue(modeColor);
+
+    //        std::cout << "red: " << red << " green: " << green << " blue: " << blue << std::endl;
+    //        staticColor.Color = modeColor;
+
+    //        result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_STATIC, &staticColor, &effectID);
+    //        if (result != 0)
+    //        {
+    //            std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //        }
+
+    //        result = SetEffect(effectID);
+    //        if (result != 0)
+    //        {
+    //            std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //        }
+    //    }
+    //}
 }
