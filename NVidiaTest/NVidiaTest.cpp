@@ -54,6 +54,7 @@ QUERYDEVICE QueryDevice = NULL;
 
 //TODO: Color from mouse cursor position.
 //TODO: Error handling/logging.
+//TODO: Move third party header files into base of this project.
 int main()
 {
     HMODULE razerModule;
@@ -114,44 +115,6 @@ int main()
 
     constexpr int maxKeyboardKeys = ChromaSDK::Keyboard::v2::MAX_COLUMN * ChromaSDK::Keyboard::v2::MAX_ROW;
 
-    //This version collates the most commonly occuring colors from the screen and disperses those colours across our keys.
-    //while (true)
-    //{
-    //    std::vector<COLORREF> commonColors = Helper::GetCommonColorsFromScreen();
-    //    std::size_t commonColorsSize = commonColors.size();
-
-    //    //size will be 0 if the user locks their screen.
-    //    if (commonColorsSize == 0)
-    //    {
-    //        Sleep(1000);
-    //        continue;
-    //    }
-
-    //    int colorIndex = 0;
-    //    for (int i = 0; i != ChromaSDK::Keyboard::v2::MAX_ROW; ++i)
-    //    {
-    //        for (int x = 0; x != ChromaSDK::Keyboard::v2::MAX_COLUMN; ++x)
-    //        {
-    //            if (colorIndex == commonColorsSize) colorIndex = 0;
-
-    //            Effect.Color[i][x] = commonColors[colorIndex];
-    //            ++colorIndex;
-    //        }
-    //    }
-
-    //    result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_CUSTOM2, &Effect, &effectID);
-    //    if (result != 0)
-    //    {
-    //        std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
-    //    }
-
-    //    result = SetEffect(effectID);
-    //    if (result != 0)
-    //    {
-    //        std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
-    //    }
-    //}
-
     //This version gets a collection of colors discovered on the screen and applies a random color to a random key on the keyboard.
     //This one is my favourite so far.
     while (true)
@@ -200,7 +163,49 @@ int main()
 
             customEffect = {};
         }
+        else
+        {
+            Sleep(1000);
+        }
     }
+
+    //This version collates the most commonly occuring colors from the screen and disperses those colours across our keys.
+    //while (true)
+    //{
+    //    std::vector<COLORREF> commonColors = Helper::GetCommonColorsFromScreen();
+    //    std::size_t commonColorsSize = commonColors.size();
+
+    //    //size will be 0 if the user locks their screen.
+    //    if (commonColorsSize == 0)
+    //    {
+    //        Sleep(1000);
+    //        continue;
+    //    }
+
+    //    int colorIndex = 0;
+    //    for (int i = 0; i != ChromaSDK::Keyboard::v2::MAX_ROW; ++i)
+    //    {
+    //        for (int x = 0; x != ChromaSDK::Keyboard::v2::MAX_COLUMN; ++x)
+    //        {
+    //            if (colorIndex == commonColorsSize) colorIndex = 0;
+
+    //            Effect.Color[i][x] = commonColors[colorIndex];
+    //            ++colorIndex;
+    //        }
+    //    }
+
+    //    result = CreateKeyboardEffect(ChromaSDK::Keyboard::CHROMA_CUSTOM2, &Effect, &effectID);
+    //    if (result != 0)
+    //    {
+    //        std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //    }
+
+    //    result = SetEffect(effectID);
+    //    if (result != 0)
+    //    {
+    //        std::cout << "Ran into error applying custom keyboard effect. Error Code: " << result << std::endl;
+    //    }
+    //}
 
     //This version gets a collection of colors discovered on the screen and applies randomly a color as a static color to the keyboard.
     //The pixels are scanned both horizontally and vertically across the monitor.
