@@ -152,7 +152,7 @@ int main()
     //    }
     //}
 
-    //This version gets a collection of colors discovered on the screen and applies randomly a color as to a random key on the keyboard.
+    //This version gets a collection of colors discovered on the screen and applies a random color to a random key on the keyboard.
     //This one is my favourite so far.
     while (true)
     {
