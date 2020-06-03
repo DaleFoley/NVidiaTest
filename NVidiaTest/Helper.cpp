@@ -23,9 +23,7 @@ COLORREF Helper::getRandomColor(std::vector<COLORREF> v)
     COLORREF result = 0;
 
     int max = v.size();
-    int min = 0;
-
-    int randomIndex = std::rand() % (max - min) + (min);
+    int randomIndex = std::rand() % max;
 
     result = v[randomIndex];
 

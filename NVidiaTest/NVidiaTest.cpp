@@ -177,8 +177,8 @@ int main()
 
                 while (customEffect.Color[row][col] != 0)
                 {
-                    row = std::rand() % (ChromaSDK::Keyboard::v2::MAX_ROW - 0) + 0;
-                    col = std::rand() % (ChromaSDK::Keyboard::v2::MAX_COLUMN - 0) + 0;
+                    row = std::rand() % ChromaSDK::Keyboard::v2::MAX_ROW;
+                    col = std::rand() % ChromaSDK::Keyboard::v2::MAX_COLUMN;
                 }
 
                 customEffect.Color[row][col] = randomColor;
