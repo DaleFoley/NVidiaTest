@@ -60,17 +60,11 @@ std::vector<COLORREF> Helper::GetCommonColorsFromScreenVerticalHorizontal(int pi
     return result;
 }
 
-std::vector<COLORREF> Helper::GetCommonColorsFromScreenX()
+std::vector<COLORREF> Helper::GetCommonColorsFromScreenX(std::vector<ScreenBoundaries> screensBoundaries, HDC topWindow)
 {
     //TODO: Another way to possibly make this faster is by taking a snapshot of the current
     //      frame on the monitor, resizing the image and getting the RGB values from that.
     std::vector<COLORREF> result;
-
-    //Maybe pass this in as a parameter instead of always updating it on this function call..
-    HDC topWindow = GetWindowDC(NULL);
-
-    std::vector<ScreenBoundaries> screensBoundaries;
-    EnumDisplayMonitors(topWindow, NULL, MonitorInfoEnumProc, reinterpret_cast<LPARAM>(&screensBoundaries));
 
     std::size_t scrSize = screensBoundaries.size();
     if (scrSize > 0)

@@ -34,7 +34,7 @@ public:
     Gets pixels across the primary monitor display in an 'X' pattern.
     @return a vector of COLORREF of all identified pixels.
 */
-    static std::vector<COLORREF> GetCommonColorsFromScreenX();
+    static std::vector<COLORREF> GetCommonColorsFromScreenX(std::vector<ScreenBoundaries> screensBoundaries, HDC topWindow);
 
 //Template functions
 

@@ -105,11 +105,16 @@ int main()
 
     constexpr int maxKeyboardKeys = ChromaSDK::Keyboard::v2::MAX_COLUMN * ChromaSDK::Keyboard::v2::MAX_ROW;
 
+    HDC topWindow = GetWindowDC(NULL);
+
+    std::vector<Helper::ScreenBoundaries> screensBoundaries;
+    EnumDisplayMonitors(topWindow, NULL, Helper::MonitorInfoEnumProc, reinterpret_cast<LPARAM>(&screensBoundaries));
+
     //This version gets a collection of colors discovered on the screen and applies a random color to a random key on the keyboard.
     //This one is my favourite so far.
     while (true)
     {
-        std::vector<COLORREF> colors = Helper::GetCommonColorsFromScreenX();
+        std::vector<COLORREF> colors = Helper::GetCommonColorsFromScreenX(screensBoundaries, topWindow);
 
         std::size_t colorsSize = colors.size();
         if (colorsSize > 0)
